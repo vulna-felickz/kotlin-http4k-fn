@@ -66,7 +66,8 @@ class VulnerableShoppingCartApp {
                 <a href="/">Back to Home</a>
             </body>
             </html>
-        """.trimIndent()
+        """
+        // .trimIndent()
         return Response(Status.OK).body(html).header("Content-Type", "text/html")
     }
     
