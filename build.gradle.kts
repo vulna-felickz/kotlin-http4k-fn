@@ -18,6 +18,9 @@ dependencies {
     // jsoup for HTML parsing
     implementation("org.jsoup:jsoup:1.16.2")
     
+    // H2 in-memory database
+    implementation("com.h2database:h2:2.2.224")
+    
     // Testing
     testImplementation(kotlin("test"))
     testImplementation("org.http4k:http4k-testing-hamkrest:5.10.2.0")
