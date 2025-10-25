@@ -5,6 +5,9 @@ import org.http4k.server.Netty
 import org.http4k.server.asServer
 import org.http4k.routing.bind
 import org.http4k.routing.routes
+import java.sql.Connection
+import java.sql.DriverManager
+import java.sql.ResultSet
 
 /**
  * Main entry point for the vulnerable shopping cart web application.
@@ -18,7 +21,10 @@ fun main() {
 
 class VulnerableShoppingCartApp {
     
-    // In-memory "database" for demonstration
+    // Database connection
+    private val dbConnection: Connection = DriverManager.getConnection("jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1", "sa", "")
+    
+    // In-memory "database" for cart functionality
     private val cartItems = mutableMapOf<String, MutableList<String>>()
     private val products = listOf(
         Product("1", "Laptop", 999.99),
@@ -27,6 +33,45 @@ class VulnerableShoppingCartApp {
         Product("4", "Monitor", 299.99)
     )
     
+    init {
+        // Initialize database with products table
+        initializeDatabase()
+    }
+    
+    /**
+     * Initialize H2 database with products table
+     */
+    private fun initializeDatabase() {
+        val statement = dbConnection.createStatement()
+        
+        // Create products table
+        statement.execute("""
+            CREATE TABLE IF NOT EXISTS products (
+                id VARCHAR(10) PRIMARY KEY,
+                name VARCHAR(100),
+                price DECIMAL(10, 2)
+            )
+        """)
+        
+        // Check if products already exist
+        val countResult = statement.executeQuery("SELECT COUNT(*) as cnt FROM products")
+        countResult.next()
+        val count = countResult.getInt("cnt")
+        countResult.close()
+        
+        // Only insert if table is empty
+        if (count == 0) {
+            products.forEach { product ->
+                statement.execute("""
+                    INSERT INTO products (id, name, price) 
+                    VALUES ('${product.id}', '${product.name}', ${product.price})
+                """)
+            }
+        }
+        
+        statement.close()
+    }
+    
     fun start(port: Int = 9000) {
         val server = createApp().asServer(Netty(port)).start()
         println("Server started on http://localhost:$port")
@@ -34,7 +79,7 @@ class VulnerableShoppingCartApp {
         println("\nAvailable endpoints:")
         println("  GET  /                    - Home page with product list")
         println("  GET  /greet?name=<name>   - Vulnerable XSS endpoint (reflects input)")
-        println("  GET  /search?q=<query>    - Vulnerable SQL-like search (injection demo)")
+        println("  GET  /search?q=<query>    - Vulnerable SQL search (injection demo with H2 database)")
         println("  POST /cart/add            - Add item to cart (CSRF vulnerable)")
         println("  GET  /cart?user=<user>    - View cart (insecure direct object reference)")
         println("  GET  /header-widget       - Shopping cart widget HTML")
@@ -72,22 +117,37 @@ class VulnerableShoppingCartApp {
     }
     
     /**
-     * VULNERABILITY 2: SQL Injection (simulated)
-     * This endpoint uses string concatenation to build a query.
+     * VULNERABILITY 2: SQL Injection
+     * This endpoint uses string concatenation to build a query without parameterization.
      * Exploit: /search?q=laptop' OR '1'='1
      */
     private fun handleSearch(request: Request): Response {
         val query = request.query("q") ?: ""
         
-        // VULNERABLE: Simulating SQL injection by using string concatenation
-        // In a real app, this would be: "SELECT * FROM products WHERE name LIKE '%$query%'"
-        val simulatedSql = "SELECT * FROM products WHERE name LIKE '%$query%'"
+        // VULNERABLE: Using string concatenation to build SQL query
+        // This allows SQL injection attacks
+        val sql = "SELECT * FROM products WHERE name LIKE '%$query%'"
         
-        // Simulate SQL injection: if query contains OR '1'='1', return all products
-        val results = if (query.contains("' OR '") || query.contains("1=1")) {
-            products // Return all products (simulating SQL injection success)
-        } else {
-            products.filter { it.name.contains(query, ignoreCase = true) }
+        val results = mutableListOf<Product>()
+        try {
+            val statement = dbConnection.createStatement()
+            val resultSet: ResultSet = statement.executeQuery(sql)
+            
+            while (resultSet.next()) {
+                results.add(
+                    Product(
+                        id = resultSet.getString("id"),
+                        name = resultSet.getString("name"),
+                        price = resultSet.getDouble("price")
+                    )
+                )
+            }
+            
+            resultSet.close()
+            statement.close()
+        } catch (e: Exception) {
+            // Log SQL error but continue to show the vulnerability
+            println("SQL Error: ${e.message}")
         }
         
         val resultsHtml = results.joinToString("") { 
@@ -100,7 +160,7 @@ class VulnerableShoppingCartApp {
             <body>
                 <h1>Search Results</h1>
                 <p>Query: $query</p>
-                <p>SQL: $simulatedSql</p>
+                <p>SQL: $sql</p>
                 <ul>$resultsHtml</ul>
                 <a href="/">Back to Home</a>
             </body>

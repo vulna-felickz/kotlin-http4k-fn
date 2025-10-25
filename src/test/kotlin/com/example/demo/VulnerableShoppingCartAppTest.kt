@@ -32,12 +32,12 @@ class VulnerableShoppingCartAppTest {
 
     @Test
     fun `SQL injection vulnerability - returns all products`() {
-        val injectionPayload = "laptop' OR '1'='1"
+        val injectionPayload = "' OR '1'='1"
         val response = handler(Request(Method.GET, "/search?q=$injectionPayload"))
         
         assertEquals(Status.OK, response.status)
         val body = response.bodyString()
-        // Should return all products due to SQL injection simulation
+        // Should return all products due to SQL injection
         assertTrue(body.contains("Laptop"))
         assertTrue(body.contains("Mouse"))
         assertTrue(body.contains("Keyboard"))

